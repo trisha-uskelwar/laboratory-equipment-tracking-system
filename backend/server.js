@@ -1,21 +1,49 @@
+
 const express = require('express')
 const cors = require('cors')
 require('dotenv').config()
 
-require('node:dns').setServers(['8.8.8.8', '8.8.4.4'])
+// Apply the DNS workaround only during local development
+if (process.env.NODE_ENV !== 'production') {
+  require('node:dns').setServers(['8.8.8.8', '8.8.4.4'])
+}
 
 const connectDB = require('./config/db')
 const equipmentRoutes = require('./routes/equipmentRoutes')
 
 const app = express()
 
+// Allowed frontend origins
+const allowedOrigins = (process.env.FRONTEND_URL || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean)
+
+// Allow localhost during local development
+if (process.env.NODE_ENV !== 'production') {
+  allowedOrigins.push('http://localhost:5173')
+}
+
 // Middleware
-app.use(cors())
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests without an Origin header (e.g. health checks)
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true)
+      }
+
+      return callback(new Error('Not allowed by CORS'))
+    },
+  })
+)
+
 app.use(express.json())
 
+// Equipment API routes
 app.use('/api/equipment', equipmentRoutes)
 
-// Test route
+// Root test route
 app.get('/', (req, res) => {
   res.send('LabTrack API is running!')
 })
@@ -39,4 +67,7 @@ const startServer = async () => {
   })
 }
 
-startServer()
+startServer().catch((error) => {
+  console.error('Failed to start LabTrack server:', error.message)
+  process.exit(1)
+})
